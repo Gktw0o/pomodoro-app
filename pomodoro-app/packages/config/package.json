@@ -1,0 +1,17 @@
+{
+  "name": "@pomodoro/config",
+  "version": "1.0.0",
+  "description": "Shared configuration for Pomodoro App",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "lint": "eslint src/**/*.ts",
+    "type-check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.2.2",
+    "@types/node": "^20.8.10"
+  }
+}
