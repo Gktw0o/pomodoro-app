@@ -1,0 +1,25 @@
+{
+  "name": "@pomodoro/database",
+  "version": "1.0.0",
+  "description": "Pomodoro App Database Schema and Prisma Client",
+  "main": "index.js",
+  "scripts": {
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:studio": "prisma studio",
+    "db:seed": "tsx src/seed.ts",
+    "db:reset": "prisma migrate reset",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.6.0"
+  },
+  "devDependencies": {
+    "prisma": "^5.6.0",
+    "typescript": "^5.2.2",
+    "@types/node": "^20.8.10",
+    "tsx": "^4.6.0"
+  }
+}

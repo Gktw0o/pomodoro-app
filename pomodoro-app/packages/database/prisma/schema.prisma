@@ -1,0 +1,307 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/@prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model for authentication and user management
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  avatar    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Authentication
+  password     String?
+  emailVerified DateTime?
+  
+  // OAuth providers
+  accounts Account[]
+  sessions Session[]
+
+  // User preferences and settings
+  settings UserSettings?
+
+  // Subscription and billing
+  subscription Subscription?
+  
+  // User data
+  projects      Project[]
+  tasks         Task[]
+  pomodoroSessions PomodoroSession[]
+  analytics     UserAnalytics?
+
+  @@map("users")
+}
+
+// OAuth accounts (Google, GitHub, etc.)
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+// User sessions
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+// User settings and preferences
+model UserSettings {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  // Pomodoro settings
+  workDuration      Int     @default(25) // minutes
+  shortBreakDuration Int     @default(5)  // minutes
+  longBreakDuration Int     @default(15) // minutes
+  sessionsUntilLongBreak Int @default(4)
+  
+  // Notification settings
+  soundEnabled      Boolean @default(true)
+  desktopNotifications Boolean @default(true)
+  emailNotifications Boolean @default(false)
+  
+  // UI preferences
+  theme            String  @default("light") // light, dark, auto
+  language         String  @default("en")
+  timezone         String  @default("UTC")
+  
+  // Privacy settings
+  publicProfile    Boolean @default(false)
+  shareStats       Boolean @default(false)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_settings")
+}
+
+// Subscription and billing
+model Subscription {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  
+  // Stripe subscription details
+  stripeSubscriptionId String? @unique
+  stripeCustomerId     String? @unique
+  stripePriceId        String?
+  
+  // Subscription details
+  plan      SubscriptionPlan @default(FREE)
+  status    SubscriptionStatus @default(ACTIVE)
+  
+  // Billing
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  cancelAtPeriodEnd  Boolean @default(false)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("subscriptions")
+}
+
+enum SubscriptionPlan {
+  FREE
+  PRO
+  PREMIUM
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELED
+  PAST_DUE
+  UNPAID
+  INCOMPLETE
+}
+
+// Projects for organizing tasks
+model Project {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  color       String   @default("#ef4444") // Hex color code
+  archived    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  tasks Task[]
+
+  @@map("projects")
+}
+
+// Tasks and todos
+model Task {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  completed   Boolean  @default(false)
+  priority    Priority @default(MEDIUM)
+  dueDate     DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  // Pomodoro sessions for this task
+  pomodoroSessions PomodoroSession[]
+
+  // Subtasks
+  parentId String?
+  parent   Task?   @relation("TaskSubtasks", fields: [parentId], references: [id], onDelete: Cascade)
+  subtasks Task[]  @relation("TaskSubtasks")
+
+  @@map("tasks")
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+// Pomodoro sessions
+model PomodoroSession {
+  id        String   @id @default(cuid())
+  type      SessionType @default(WORK)
+  duration  Int      // Duration in minutes
+  completed Boolean  @default(false)
+  startedAt DateTime @default(now())
+  endedAt   DateTime?
+  
+  // Relations
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  taskId String?
+  task   Task?   @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@map("pomodoro_sessions")
+}
+
+enum SessionType {
+  WORK
+  SHORT_BREAK
+  LONG_BREAK
+}
+
+// User analytics and statistics
+model UserAnalytics {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  // Overall statistics
+  totalPomodoroSessions Int @default(0)
+  totalFocusTime        Int @default(0) // Total minutes focused
+  totalTasksCompleted   Int @default(0)
+  currentStreak         Int @default(0) // Days with at least one completed session
+  longestStreak         Int @default(0)
+  
+  // Weekly/Monthly data (JSON stored as string)
+  weeklyStats   Json? // { week: "2024-01", sessions: 25, focusTime: 625 }
+  monthlyStats  Json? // { month: "2024-01", sessions: 100, focusTime: 2500 }
+  
+  lastUpdated DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_analytics")
+}
+
+// Admin and monitoring tables
+model AdminLog {
+  id        String   @id @default(cuid())
+  action    String   // Action performed
+  details   Json?    // Additional details
+  adminId   String   // Admin user ID
+  targetId  String?  // Target user/resource ID
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@map("admin_logs")
+}
+
+// System metrics for monitoring
+model SystemMetric {
+  id        String   @id @default(cuid())
+  name      String   // Metric name (active_users, revenue, etc.)
+  value     Float    // Metric value
+  metadata  Json?    // Additional metadata
+  timestamp DateTime @default(now())
+
+  @@index([name, timestamp])
+  @@map("system_metrics")
+}
+
+// Feedback and support
+model Feedback {
+  id        String      @id @default(cuid())
+  type      FeedbackType @default(GENERAL)
+  subject   String
+  message   String      @db.Text
+  email     String?
+  userId    String?
+  status    FeedbackStatus @default(OPEN)
+  priority  Priority    @default(MEDIUM)
+  response  String?     @db.Text
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@map("feedback")
+}
+
+enum FeedbackType {
+  GENERAL
+  BUG_REPORT
+  FEATURE_REQUEST
+  BILLING
+  TECHNICAL_SUPPORT
+}
+
+enum FeedbackStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
